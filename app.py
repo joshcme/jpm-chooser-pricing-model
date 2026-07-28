@@ -209,7 +209,6 @@ def simulate_chooser_mc(S0, K, T1, T2, r, q, sigma, n_paths=200000, decision_rul
 # -------------------------------------------------------------------
 
 PROCESSED_PATH = "data/processed/jpm_features.csv"
-
 @st.cache_data(ttl=3600)
 def fetch_live_data():
     """
@@ -282,7 +281,6 @@ def fetch_live_data():
                     if isinstance(data.columns, pd.MultiIndex):
                         data.columns = data.columns.get_level_values(0)
                     data = data.reset_index()
-                    # yfinance returns rates as percentages (e.g., 4.5 = 4.5%)
                     data.rename(columns={"Date": "date", "Close": name}, inplace=True)
                     data["date"] = pd.to_datetime(data["date"]).dt.tz_localize(None)
                     rate_data[name] = data[["date", name]]
@@ -298,19 +296,17 @@ def fetch_live_data():
                     else:
                         rates = pd.merge(rates, df_rate, on="date", how="outer")
             
-            # Forward fill and convert to decimal (FIXED: using method parameter directly)
+            # Forward fill and convert to decimal (FIXED: using ffill)
             if rates is not None:
                 rates = rates.sort_values("date")
                 for col in ["rate_3month", "rate_5year", "rate_10year", "vix"]:
                     if col in rates.columns:
-                        # FIXED: Use fillna(method='ffill') directly
-                        rates[col] = rates[col].fillna(method='ffill').fillna(method='bfill')
-                        # Convert to decimal for BSM (e.g., 4.5 -> 0.045)
-                        # VIX is already in percentage points
+                        # FIXED: Use ffill() which is more compatible
+                        rates[col] = rates[col].ffill().bfill()
                         if col != "vix":
                             rates[col] = rates[col] / 100.0
                 
-                # Approximate 1-year rate from 3-month and 5-year
+                # Approximate 1-year rate
                 if "rate_3month" in rates.columns and "rate_5year" in rates.columns:
                     rates["rate_1year"] = rates["rate_3month"] + 0.25 * (rates["rate_5year"] - rates["rate_3month"])
                 else:
@@ -328,11 +324,10 @@ def fetch_live_data():
             for col in ["rate_1year", "rate_3month", "rate_5year", "rate_10year", "vix"]:
                 df[col] = 0.0
 
-        # Fill any missing rates (FIXED: using method parameter directly)
+        # Fill any missing rates (FIXED: using ffill)
         for col in ["rate_1year", "rate_3month", "rate_10year", "vix"]:
             if col in df.columns:
-                # FIXED: Use fillna(method='ffill') directly
-                df[col] = df[col].fillna(method='ffill').fillna(0.0)
+                df[col] = df[col].ffill().fillna(0.0)
             else:
                 df[col] = 0.0
 
@@ -354,8 +349,7 @@ def fetch_live_data():
                     on="date",
                     direction="backward"
                 )
-                # FIXED: Use fillna(method='ffill') directly
-                df["dividend_per_share"] = df["dividend_per_share"].fillna(method='ffill').fillna(0.0)
+                df["dividend_per_share"] = df["dividend_per_share"].ffill().fillna(0.0)
             else:
                 df["dividend_per_share"] = 0.0
         except Exception as e:
@@ -373,7 +367,6 @@ def fetch_live_data():
         df["volatility_10d"] = df["log_return"].rolling(10).std() * np.sqrt(252)
 
         return df
-
 @st.cache_data
 def load_processed_data():
     """Load the preprocessed feature CSV."""
