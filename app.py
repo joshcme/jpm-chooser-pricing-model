@@ -298,12 +298,13 @@ def fetch_live_data():
                     else:
                         rates = pd.merge(rates, df_rate, on="date", how="outer")
             
-            # Forward fill and convert to decimal
+            # Forward fill and convert to decimal (FIXED: using method parameter directly)
             if rates is not None:
                 rates = rates.sort_values("date")
                 for col in ["rate_3month", "rate_5year", "rate_10year", "vix"]:
                     if col in rates.columns:
-                        rates[col] = rates[col].fillna(method="ffill").fillna(method="bfill")
+                        # FIXED: Use fillna(method='ffill') directly
+                        rates[col] = rates[col].fillna(method='ffill').fillna(method='bfill')
                         # Convert to decimal for BSM (e.g., 4.5 -> 0.045)
                         # VIX is already in percentage points
                         if col != "vix":
@@ -327,10 +328,11 @@ def fetch_live_data():
             for col in ["rate_1year", "rate_3month", "rate_5year", "rate_10year", "vix"]:
                 df[col] = 0.0
 
-        # Fill any missing rates
+        # Fill any missing rates (FIXED: using method parameter directly)
         for col in ["rate_1year", "rate_3month", "rate_10year", "vix"]:
             if col in df.columns:
-                df[col] = df[col].fillna(method="ffill").fillna(0.0)
+                # FIXED: Use fillna(method='ffill') directly
+                df[col] = df[col].fillna(method='ffill').fillna(0.0)
             else:
                 df[col] = 0.0
 
@@ -352,7 +354,8 @@ def fetch_live_data():
                     on="date",
                     direction="backward"
                 )
-                df["dividend_per_share"] = df["dividend_per_share"].fillna(method="ffill").fillna(0.0)
+                # FIXED: Use fillna(method='ffill') directly
+                df["dividend_per_share"] = df["dividend_per_share"].fillna(method='ffill').fillna(0.0)
             else:
                 df["dividend_per_share"] = 0.0
         except Exception as e:
