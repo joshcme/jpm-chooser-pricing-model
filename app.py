@@ -411,17 +411,48 @@ def format_date(date_obj):
     return str(date_obj)
 
 # -------------------------------------------------------------------
-# 5. Main app with navigation
+# 5. Helper function to get current parameters
 # -------------------------------------------------------------------
+
+def get_current_parameters(row, K=150.0, T1=0.5, T2=1.0):
+    """Extract current parameters from data row."""
+    S0 = float(row["close"]) if "close" in row else float(row["adjusted_close"])
+    sigma = float(row["volatility_63d"]) if pd.notna(row.get("volatility_63d")) else 0.25
+    
+    r = float(row["rate_1year"]) if pd.notna(row.get("rate_1year")) else 0.04
+    if r > 1:
+        r = r / 100.0
+    
+    if "dividend_per_share" in row and pd.notna(row["dividend_per_share"]) and row["dividend_per_share"] > 0:
+        annual_dividend = row["dividend_per_share"] * 4
+        q = annual_dividend / S0 if S0 > 0 else 0.02
+    else:
+        q = 0.02
+    
+    return S0, sigma, r, q
+
+# -------------------------------------------------------------------
+# 6. Main app with navigation
+# -------------------------------------------------------------------
+
+# Initialize session state
+if 'use_live' not in st.session_state:
+    st.session_state.use_live = False
+if 'prev_data_source' not in st.session_state:
+    st.session_state.prev_data_source = False
+if 'page' not in st.session_state:
+    st.session_state.page = "Overview"
 
 # Data source selection in sidebar
 with st.sidebar:
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
     st.markdown("### Data Source")
+    
     use_live = st.checkbox(
         "Use live data (yfinance)",
-        value=False,
-        help="Fetch latest data directly from Yahoo Finance. No API key required."
+        value=st.session_state.use_live,
+        help="Fetch latest data directly from Yahoo Finance. No API key required.",
+        key="data_source_checkbox"
     )
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -432,8 +463,19 @@ with st.sidebar:
     page = st.radio(
         "Select Page",
         ["Overview", "Detailed Analysis"],
-        index=0
+        index=0 if st.session_state.page == "Overview" else 1,
+        key="navigation_radio"
     )
+
+# Update session state
+if st.session_state.use_live != use_live:
+    st.session_state.use_live = use_live
+    # Clear cache when data source changes
+    st.cache_data.clear()
+    st.rerun()
+
+if st.session_state.page != page:
+    st.session_state.page = page
 
 # Load data based on selection
 if use_live:
@@ -443,6 +485,7 @@ if use_live:
         st.error("Live data fetch failed. Falling back to processed CSV.")
         df = load_processed_data()
         use_live = False
+        st.session_state.use_live = False
     else:
         st.sidebar.success("Live data loaded successfully")
 else:
@@ -479,38 +522,17 @@ if selected_date not in df["date"].dt.date.unique():
 # Get data for selected date
 row = df[df["date"].dt.date == selected_date].iloc[-1] if selected_date else df.iloc[-1]
 
-# Extract default parameters
-default_S0 = float(row["close"]) if "close" in row else float(row["adjusted_close"])
-default_sigma = float(row["volatility_63d"]) if pd.notna(row.get("volatility_63d")) else 0.25
+# Get current parameters
+S0, sigma, r, q = get_current_parameters(row)
 
-# Rate: yfinance returns as decimal (0.045 for 4.5%)
-default_r = float(row["rate_1year"]) if pd.notna(row.get("rate_1year")) else 0.04
-if default_r > 1:
-    default_r = default_r / 100.0
-
-# Dividend yield: annualized dividend / current price
-if "dividend_per_share" in row and pd.notna(row["dividend_per_share"]) and row["dividend_per_share"] > 0:
-    annual_dividend = row["dividend_per_share"] * 4  # Quarterly dividend
-    q_est = annual_dividend / default_S0 if default_S0 > 0 else 0.02
-else:
-    q_est = 0.02
-
-# -------------------------------------------------------------------
-# 6. Define default parameters and compute prices
-# -------------------------------------------------------------------
-
-# Default parameter values
-S0 = default_S0
+# Default parameters
 K = 150.0
 T2 = 1.0
 T1 = 0.5
-r = default_r
-q = q_est
-sigma = default_sigma
 mc_paths = 200000
 run_mc = True
 
-# Compute prices (shared across pages)
+# Compute prices with current data
 cf_price, call_leg, put_leg = chooser_price_closed_form(S0, K, T1, T2, r, q, sigma)
 vanilla_call = bs_call(S0, K, T2, r, q, sigma)
 vanilla_put = bs_put(S0, K, T2, r, q, sigma)
@@ -528,7 +550,7 @@ else:
 # 7. Overview Page (Simplified)
 # -------------------------------------------------------------------
 
-def render_overview_page(df, selected_date, default_S0, default_sigma, default_r, q_est, row, S0, K, T1, T2, r, q, sigma, cf_price, vanilla_call, vanilla_put, mc_price, mc_se):
+def render_overview_page(df, selected_date, S0, sigma, r, q, row, K, T1, T2, cf_price, vanilla_call, vanilla_put, mc_price, mc_se):
     """Render the simplified overview page for non-technical users."""
     
     st.title("JPM Chooser Option Pricing Dashboard")
@@ -538,10 +560,10 @@ def render_overview_page(df, selected_date, default_S0, default_sigma, default_r
     with st.expander("Market Snapshot (Selected Date)", expanded=True):
         col1, col2, col3, col4, col5, col6 = st.columns(6)
         col1.metric("Date", format_date(selected_date))
-        col2.metric("Spot Price", f"${default_S0:.2f}")
-        col3.metric("Volatility (63d)", f"{default_sigma*100:.1f}%")
-        col4.metric("Risk-Free Rate", f"{default_r*100:.2f}%")
-        col5.metric("Dividend Yield", f"{q_est*100:.2f}%")
+        col2.metric("Spot Price", f"${S0:.2f}")
+        col3.metric("Volatility (63d)", f"{sigma*100:.1f}%")
+        col4.metric("Risk-Free Rate", f"{r*100:.2f}%")
+        col5.metric("Dividend Yield", f"{q*100:.2f}%")
         
         vix_value = float(row["vix"]) if "vix" in row and pd.notna(row["vix"]) else None
         if vix_value:
@@ -812,7 +834,7 @@ def render_overview_page(df, selected_date, default_S0, default_sigma, default_r
 # 8. Detailed Analysis Page (Full Technical)
 # -------------------------------------------------------------------
 
-def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r, q_est, row, S0, K, T1, T2, r, q, sigma, cf_price, call_leg, put_leg, vanilla_call, vanilla_put, run_mc, mc_price, mc_se, mc_payoffs, mc_paths):
+def render_detailed_page(df, selected_date, S0, sigma, r, q, row, K, T1, T2, cf_price, call_leg, put_leg, vanilla_call, vanilla_put, run_mc, mc_price, mc_se, mc_payoffs, mc_paths):
     """Render the full detailed analysis page with all technical features."""
     
     st.title("JPM Chooser Option Pricing Dashboard")
@@ -822,10 +844,10 @@ def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r
     with st.expander("Market Snapshot (Selected Date)", expanded=True):
         col1, col2, col3, col4, col5, col6 = st.columns(6)
         col1.metric("Date", format_date(selected_date))
-        col2.metric("Spot Price", f"${default_S0:.2f}")
-        col3.metric("Volatility (63d)", f"{default_sigma*100:.1f}%")
-        col4.metric("Risk-Free Rate", f"{default_r*100:.2f}%")
-        col5.metric("Dividend Yield", f"{q_est*100:.2f}%")
+        col2.metric("Spot Price", f"${S0:.2f}")
+        col3.metric("Volatility (63d)", f"{sigma*100:.1f}%")
+        col4.metric("Risk-Free Rate", f"{r*100:.2f}%")
+        col5.metric("Dividend Yield", f"{q*100:.2f}%")
         
         vix_value = float(row["vix"]) if "vix" in row and pd.notna(row["vix"]) else None
         if vix_value:
@@ -1399,9 +1421,9 @@ def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r
 
 # Render the selected page
 if page == "Overview":
-    render_overview_page(df, selected_date, default_S0, default_sigma, default_r, q_est, row, S0, K, T1, T2, r, q, sigma, cf_price, vanilla_call, vanilla_put, mc_price, mc_se)
+    render_overview_page(df, selected_date, S0, sigma, r, q, row, K, T1, T2, cf_price, vanilla_call, vanilla_put, mc_price, mc_se)
 else:
-    render_detailed_page(df, selected_date, default_S0, default_sigma, default_r, q_est, row, S0, K, T1, T2, r, q, sigma, cf_price, call_leg, put_leg, vanilla_call, vanilla_put, run_mc, mc_price, mc_se, mc_payoffs, mc_paths)
+    render_detailed_page(df, selected_date, S0, sigma, r, q, row, K, T1, T2, cf_price, call_leg, put_leg, vanilla_call, vanilla_put, run_mc, mc_price, mc_se, mc_payoffs, mc_paths)
 
 # Footer
 st.markdown("---")
