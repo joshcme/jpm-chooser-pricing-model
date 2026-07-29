@@ -455,15 +455,26 @@ else:
         )
         st.stop()
 
-# Date selection
-available_dates = df["date"].dt.date.unique()
-selected_date = st.sidebar.selectbox(
+# Date selection - Calendar picker
+min_date = df["date"].min().date()
+max_date = df["date"].max().date()
+default_date = df["date"].max().date()
+
+selected_date = st.sidebar.date_input(
     "As-of Date",
-    available_dates,
-    index=len(available_dates)-1,
-    help="Select the valuation date for pricing",
-    format_func=format_date
+    value=default_date,
+    min_value=min_date,
+    max_value=max_date,
+    help="Select the valuation date for pricing"
 )
+
+# Ensure the selected date exists in our data (find nearest available date)
+if selected_date not in df["date"].dt.date.unique():
+    # Find the nearest available date
+    available_dates = df["date"].dt.date.unique()
+    nearest_date = min(available_dates, key=lambda d: abs((d - selected_date).days))
+    st.sidebar.warning(f"Selected date not available. Using nearest date: {format_date(nearest_date)}")
+    selected_date = nearest_date
 
 # Get data for selected date
 row = df[df["date"].dt.date == selected_date].iloc[-1] if selected_date else df.iloc[-1]
