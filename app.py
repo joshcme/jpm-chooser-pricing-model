@@ -426,6 +426,14 @@ with st.sidebar:
     st.markdown('</div>', unsafe_allow_html=True)
     
     st.divider()
+    
+    # Navigation
+    st.markdown("### Navigation")
+    page = st.radio(
+        "Select Page",
+        ["Overview", "Detailed Analysis"],
+        index=0
+    )
 
 # Load data based on selection
 if use_live:
@@ -477,117 +485,19 @@ else:
     q_est = 0.02
 
 # -------------------------------------------------------------------
-# 6. Navigation
+# 6. Define default parameters and compute prices
 # -------------------------------------------------------------------
 
-# Define pages
-PAGES = {
-    "Overview": "overview",
-    "Detailed Analysis": "detailed"
-}
-
-# Page selection
-st.sidebar.markdown("### Navigation")
-page = st.sidebar.radio(
-    "Select Page",
-    list(PAGES.keys()),
-    index=0
-)
-
-# -------------------------------------------------------------------
-# 7. Parameter inputs (shared across pages)
-# -------------------------------------------------------------------
-
-with st.sidebar:
-    st.divider()
-    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown("### Option Parameters")
-    
-    S0 = st.number_input(
-        "Spot Price (S0)",
-        value=default_S0,
-        step=0.1,
-        format="%.2f",
-        help="Current price of JPM stock"
-    )
-    
-    K = st.number_input(
-        "Strike Price (K)",
-        value=150.0,
-        step=1.0,
-        min_value=0.1,
-        help="Option strike price"
-    )
-    
-    T2 = st.number_input(
-        "Maturity (T2, years)",
-        value=1.0,
-        step=0.1,
-        min_value=0.1,
-        max_value=5.0,
-        help="Time to option maturity in years"
-    )
-    
-    T1 = st.slider(
-        "Decision Date (T1, years)",
-        min_value=0.01,
-        max_value=float(T2),
-        value=min(0.5, float(T2)),
-        step=0.01,
-        help="Time when you can choose between call and put"
-    )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.divider()
-    
-    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown("### Market Parameters")
-    
-    r = st.number_input(
-        "Risk-Free Rate (r)",
-        value=default_r,
-        step=0.001,
-        format="%.4f",
-        help="Annualized continuously compounded risk-free rate"
-    )
-    
-    q = st.number_input(
-        "Dividend Yield (q)",
-        value=q_est,
-        step=0.001,
-        format="%.4f",
-        help="Annualized dividend yield"
-    )
-    
-    sigma = st.number_input(
-        "Volatility (sigma)",
-        value=default_sigma,
-        step=0.01,
-        format="%.3f",
-        help="Annualized standard deviation of returns"
-    )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.divider()
-    
-    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown("### Monte Carlo")
-    
-    mc_paths = st.number_input(
-        "Number of Paths",
-        value=200000,
-        step=10000,
-        min_value=1000,
-        max_value=1000000,
-        help="More paths = higher accuracy but slower computation"
-    )
-    
-    run_mc = st.checkbox(
-        "Run Monte Carlo Simulation",
-        value=True,
-        help="Enable Monte Carlo pricing and distribution visualization"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+# Default parameter values
+S0 = default_S0
+K = 150.0
+T2 = 1.0
+T1 = 0.5
+r = default_r
+q = q_est
+sigma = default_sigma
+mc_paths = 200000
+run_mc = True
 
 # Compute prices (shared across pages)
 cf_price, call_leg, put_leg = chooser_price_closed_form(S0, K, T1, T2, r, q, sigma)
@@ -604,10 +514,10 @@ else:
     mc_price, mc_se, mc_payoffs = None, None, None
 
 # -------------------------------------------------------------------
-# 8. Overview Page (Simplified)
+# 7. Overview Page (Simplified)
 # -------------------------------------------------------------------
 
-def render_overview_page(df, selected_date, default_S0, default_sigma, default_r, q_est, row, cf_price, vanilla_call, vanilla_put, run_mc, mc_price, mc_se, T1):
+def render_overview_page(df, selected_date, default_S0, default_sigma, default_r, q_est, row, S0, K, T1, T2, r, q, sigma, cf_price, vanilla_call, vanilla_put, mc_price, mc_se):
     """Render the simplified overview page for non-technical users."""
     
     st.title("JPM Chooser Option Pricing Dashboard")
@@ -630,6 +540,88 @@ def render_overview_page(df, selected_date, default_S0, default_sigma, default_r
     
     st.divider()
     
+    # Option Parameters - Simple version for overview with editable strike
+    st.subheader("Option Parameters")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.number_input(
+            "Spot Price (S0)",
+            value=S0,
+            step=0.1,
+            format="%.2f",
+            key="overview_S0_display",
+            disabled=True,
+            help="Current price of JPM stock"
+        )
+        
+        K_overview = st.number_input(
+            "Strike Price (K)",
+            value=K,
+            step=1.0,
+            min_value=0.1,
+            key="overview_K",
+            help="Option strike price - editable"
+        )
+    
+    with col2:
+        st.number_input(
+            "Maturity (T2, years)",
+            value=T2,
+            step=0.1,
+            min_value=0.1,
+            max_value=5.0,
+            key="overview_T2_display",
+            disabled=True,
+            help="Time to option maturity in years"
+        )
+        
+        st.number_input(
+            "Decision Date (T1, years)",
+            value=T1,
+            step=0.01,
+            key="overview_T1_display",
+            disabled=True,
+            help="Time when you can choose between call and put"
+        )
+    
+    with col3:
+        st.number_input(
+            "Risk-Free Rate (r)",
+            value=r,
+            step=0.001,
+            format="%.4f",
+            key="overview_r_display",
+            disabled=True,
+            help="Annualized continuously compounded risk-free rate"
+        )
+        
+        st.number_input(
+            "Volatility (sigma)",
+            value=sigma,
+            step=0.01,
+            format="%.3f",
+            key="overview_sigma_display",
+            disabled=True,
+            help="Annualized standard deviation of returns"
+        )
+    
+    # Check if strike changed
+    strike_changed = (K_overview != K)
+    
+    # Recalculate prices with new strike if changed
+    if strike_changed:
+        cf_price_overview, call_leg_overview, put_leg_overview = chooser_price_closed_form(S0, K_overview, T1, T2, r, q, sigma)
+        vanilla_call_overview = bs_call(S0, K_overview, T2, r, q, sigma)
+        vanilla_put_overview = bs_put(S0, K_overview, T2, r, q, sigma)
+    else:
+        cf_price_overview = cf_price
+        vanilla_call_overview = vanilla_call
+        vanilla_put_overview = vanilla_put
+    
+    st.caption("*Strike price is editable. Other parameters shown for reference. Use Detailed Analysis page for full customization.*")
+    st.divider()
+    
     # Simple pricing results
     st.subheader("Option Pricing Results")
     
@@ -639,26 +631,27 @@ def render_overview_page(df, selected_date, default_S0, default_sigma, default_r
     with col1:
         st.metric(
             "Chooser Option Price",
-            f"${cf_price:.4f}",
+            f"${cf_price_overview:.4f}",
             help="Price of the chooser option using closed-form solution"
         )
     
     with col2:
         st.metric(
             "Call Option Price",
-            f"${vanilla_call:.4f}",
+            f"${vanilla_call_overview:.4f}",
             help="Price of a vanilla call option at maturity"
         )
     
     with col3:
         st.metric(
             "Put Option Price",
-            f"${vanilla_put:.4f}",
+            f"${vanilla_put_overview:.4f}",
             help="Price of a vanilla put option at maturity"
         )
     
     with col4:
-        if run_mc and mc_price is not None:
+        # Only show Monte Carlo if strike hasn't changed
+        if not strike_changed and mc_price is not None:
             st.metric(
                 "Monte Carlo Price",
                 f"${mc_price:.4f}",
@@ -668,8 +661,8 @@ def render_overview_page(df, selected_date, default_S0, default_sigma, default_r
         else:
             st.metric(
                 "Monte Carlo",
-                "Not Run",
-                help="Enable Monte Carlo in sidebar"
+                "Not Available",
+                help="Monte Carlo results only available with default strike. Use Detailed Analysis page for full Monte Carlo."
             )
     
     # Simple interpretation
@@ -681,24 +674,24 @@ def render_overview_page(df, selected_date, default_S0, default_sigma, default_r
     with col1:
         st.info(
             f"""
-            **Chooser Option Value:** ${cf_price:.4f}
+            **Chooser Option Value:** ${cf_price_overview:.4f}
             
             The chooser option gives you the right to choose between a call and a put
             at the decision date (T1 = {T1:.2f} years).
             
-            This flexibility is worth an additional **${(cf_price - vanilla_call):.4f}**
+            This flexibility is worth an additional **${(cf_price_overview - vanilla_call_overview):.4f}**
             compared to a vanilla call option.
             """
         )
     
     with col2:
-        if run_mc and mc_price is not None:
+        if not strike_changed and mc_price is not None:
             st.success(
                 f"""
                 **Monte Carlo Validation:** ${mc_price:.4f}
                 
                 The Monte Carlo simulation confirms the closed-form result.
-                The difference is **${(mc_price - cf_price):+.4f}**.
+                The difference is **${(mc_price - cf_price_overview):+.4f}**.
                 
                 Confidence Interval: [${mc_price - 1.96*mc_se:.4f}, ${mc_price + 1.96*mc_se:.4f}]
                 """
@@ -708,8 +701,9 @@ def render_overview_page(df, selected_date, default_S0, default_sigma, default_r
                 """
                 **Monte Carlo Simulation**
                 
-                Enable Monte Carlo in the sidebar to validate the closed-form
-                pricing and see the distribution of possible payoffs.
+                Monte Carlo results are shown for the default strike price.
+                Switch to the Detailed Analysis page to run Monte Carlo
+                simulation with custom strike prices.
                 """
             )
     
@@ -804,10 +798,10 @@ def render_overview_page(df, selected_date, default_S0, default_sigma, default_r
         """)
 
 # -------------------------------------------------------------------
-# 9. Detailed Analysis Page (Full Technical)
+# 8. Detailed Analysis Page (Full Technical)
 # -------------------------------------------------------------------
 
-def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r, q_est, row, cf_price, call_leg, put_leg, vanilla_call, vanilla_put, run_mc, mc_price, mc_se, mc_payoffs, mc_paths, S0, K, T1, T2, r, q, sigma):
+def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r, q_est, row, S0, K, T1, T2, r, q, sigma, cf_price, call_leg, put_leg, vanilla_call, vanilla_put, run_mc, mc_price, mc_se, mc_payoffs, mc_paths):
     """Render the full detailed analysis page with all technical features."""
     
     st.title("JPM Chooser Option Pricing Dashboard")
@@ -830,7 +824,130 @@ def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r
     
     st.divider()
     
-    # Display pricing results in metric cards
+    # Parameter inputs in the main area
+    st.subheader("Option Parameters")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        S0_input = st.number_input(
+            "Spot Price (S0)",
+            value=S0,
+            step=0.1,
+            format="%.2f",
+            help="Current price of JPM stock",
+            key="detailed_S0"
+        )
+        
+        K_input = st.number_input(
+            "Strike Price (K)",
+            value=K,
+            step=1.0,
+            min_value=0.1,
+            help="Option strike price",
+            key="detailed_K"
+        )
+    
+    with col2:
+        T2_input = st.number_input(
+            "Maturity (T2, years)",
+            value=T2,
+            step=0.1,
+            min_value=0.1,
+            max_value=5.0,
+            help="Time to option maturity in years",
+            key="detailed_T2"
+        )
+        
+        T1_input = st.slider(
+            "Decision Date (T1, years)",
+            min_value=0.01,
+            max_value=float(T2_input),
+            value=min(T1, float(T2_input)),
+            step=0.01,
+            help="Time when you can choose between call and put",
+            key="detailed_T1"
+        )
+    
+    with col3:
+        r_input = st.number_input(
+            "Risk-Free Rate (r)",
+            value=r,
+            step=0.001,
+            format="%.4f",
+            help="Annualized continuously compounded risk-free rate",
+            key="detailed_r"
+        )
+        
+        q_input = st.number_input(
+            "Dividend Yield (q)",
+            value=q,
+            step=0.001,
+            format="%.4f",
+            help="Annualized dividend yield",
+            key="detailed_q"
+        )
+        
+        sigma_input = st.number_input(
+            "Volatility (sigma)",
+            value=sigma,
+            step=0.01,
+            format="%.3f",
+            help="Annualized standard deviation of returns",
+            key="detailed_sigma"
+        )
+    
+    # Monte Carlo options
+    st.divider()
+    st.subheader("Monte Carlo Simulation")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        mc_paths_input = st.number_input(
+            "Number of Paths",
+            value=mc_paths,
+            step=10000,
+            min_value=1000,
+            max_value=1000000,
+            help="More paths = higher accuracy but slower computation",
+            key="detailed_mc_paths"
+        )
+    
+    with col2:
+        run_mc_input = st.checkbox(
+            "Run Monte Carlo Simulation",
+            value=run_mc,
+            help="Enable Monte Carlo pricing and distribution visualization",
+            key="detailed_run_mc"
+        )
+    
+    st.divider()
+    
+    # Use inputs for calculations
+    S0_use = S0_input
+    K_use = K_input
+    T2_use = T2_input
+    T1_use = T1_input
+    r_use = r_input
+    q_use = q_input
+    sigma_use = sigma_input
+    
+    # Recompute prices with new inputs
+    cf_price_use, call_leg_use, put_leg_use = chooser_price_closed_form(S0_use, K_use, T1_use, T2_use, r_use, q_use, sigma_use)
+    vanilla_call_use = bs_call(S0_use, K_use, T2_use, r_use, q_use, sigma_use)
+    vanilla_put_use = bs_put(S0_use, K_use, T2_use, r_use, q_use, sigma_use)
+    
+    # Run Monte Carlo if enabled
+    if run_mc_input:
+        with st.spinner("Running Monte Carlo simulation..."):
+            mc_price_use, mc_se_use, mc_payoffs_use = simulate_chooser_mc(
+                S0_use, K_use, T1_use, T2_use, r_use, q_use, sigma_use, n_paths=mc_paths_input, decision_rule="optimal"
+            )
+    else:
+        mc_price_use, mc_se_use, mc_payoffs_use = None, None, None
+    
+    # Display pricing results
     st.subheader("Pricing Results")
     
     cols = st.columns(4)
@@ -839,7 +956,7 @@ def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label">Chooser Price (BSM)</div>
-            <div class="metric-value">${cf_price:.4f}</div>
+            <div class="metric-value">${cf_price_use:.4f}</div>
         </div>
         """, unsafe_allow_html=True)
     
@@ -847,7 +964,7 @@ def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label">Vanilla Call (T2)</div>
-            <div class="metric-value">${vanilla_call:.4f}</div>
+            <div class="metric-value">${vanilla_call_use:.4f}</div>
         </div>
         """, unsafe_allow_html=True)
     
@@ -855,21 +972,21 @@ def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label">Vanilla Put (T2)</div>
-            <div class="metric-value">${vanilla_put:.4f}</div>
+            <div class="metric-value">${vanilla_put_use:.4f}</div>
         </div>
         """, unsafe_allow_html=True)
     
     with cols[3]:
-        if run_mc and mc_price is not None:
-            delta = mc_price - cf_price
+        if run_mc_input and mc_price_use is not None:
+            delta = mc_price_use - cf_price_use
             delta_class = "metric-delta-positive" if delta > 0 else "metric-delta-negative" if delta < 0 else ""
             st.markdown(f"""
             <div class="metric-card">
                 <div class="metric-label">Monte Carlo Price</div>
-                <div class="metric-value">${mc_price:.4f}</div>
+                <div class="metric-value">${mc_price_use:.4f}</div>
                 <div style="font-size:0.9rem;margin-top:5px;">
                     <span class="{delta_class}">{delta:+.4f}</span>
-                    <span style="color:#6c757d;font-size:0.8rem;"> ±{1.96*mc_se:.4f} (95% CI)</span>
+                    <span style="color:#6c757d;font-size:0.8rem;"> ±{1.96*mc_se_use:.4f} (95% CI)</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -884,23 +1001,23 @@ def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r
     # Decomposition details
     with st.expander("Pricing Decomposition Details"):
         col1, col2, col3 = st.columns(3)
-        col1.metric("Call Leg (T2)", f"${call_leg:.4f}")
-        col2.metric("Put Leg (T1, K')", f"${put_leg:.4f}")
-        col3.metric("Total Chooser", f"${cf_price:.4f}")
+        col1.metric("Call Leg (T2)", f"${call_leg_use:.4f}")
+        col2.metric("Put Leg (T1, K')", f"${put_leg_use:.4f}")
+        col3.metric("Total Chooser", f"${cf_price_use:.4f}")
         
-        st.caption(f"Adjusted Strike K' = K * exp(-(r-q) * (T2-T1)) = {K * np.exp(-(r-q) * (T2-T1)):.2f}")
+        st.caption(f"Adjusted Strike K' = K * exp(-(r-q) * (T2-T1)) = {K_use * np.exp(-(r_use-q_use) * (T2_use-T1_use)):.2f}")
     
     st.divider()
     
     # Monte Carlo Payoff Distribution
-    if run_mc and mc_price is not None and mc_payoffs is not None:
+    if run_mc_input and mc_price_use is not None and mc_payoffs_use is not None:
         st.subheader("Monte Carlo Payoff Distribution")
         
         fig_payoff = go.Figure()
         
         # Histogram of discounted payoffs
         fig_payoff.add_trace(go.Histogram(
-            x=mc_payoffs,
+            x=mc_payoffs_use,
             nbinsx=50,
             name="Payoff Distribution",
             marker_color='#1f77b4',
@@ -909,15 +1026,15 @@ def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r
         
         # Add mean line
         fig_payoff.add_vline(
-            x=mc_price,
+            x=mc_price_use,
             line=dict(color="red", dash="dash", width=2),
-            annotation_text=f"Mean: ${mc_price:.4f}",
+            annotation_text=f"Mean: ${mc_price_use:.4f}",
             annotation_position="top right"
         )
         
         # Add confidence interval
-        ci_lower = mc_price - 1.96 * mc_se
-        ci_upper = mc_price + 1.96 * mc_se
+        ci_lower = mc_price_use - 1.96 * mc_se_use
+        ci_upper = mc_price_use + 1.96 * mc_se_use
         fig_payoff.add_vline(
             x=ci_lower,
             line=dict(color="orange", dash="dot", width=1),
@@ -943,10 +1060,10 @@ def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r
         # Add summary stats
         st.caption(f"""
         **Monte Carlo Statistics:**
-        * Mean: ${mc_price:.4f}
-        * Standard Error: ${mc_se:.4f}
+        * Mean: ${mc_price_use:.4f}
+        * Standard Error: ${mc_se_use:.4f}
         * 95% Confidence Interval: [${ci_lower:.4f}, ${ci_upper:.4f}]
-        * Paths: {mc_paths:,}
+        * Paths: {mc_paths_input:,}
         """)
         
         st.plotly_chart(fig_payoff, use_container_width=True)
@@ -962,7 +1079,7 @@ def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r
     q_range = np.linspace(0.0, 0.10, 60)
     
     # Create base tuple for caching
-    base = {"S0": S0, "K": K, "T1": T1, "T2": T2, "r": r, "q": q, "sigma": sigma}
+    base = {"S0": S0_use, "K": K_use, "T1": T1_use, "T2": T2_use, "r": r_use, "q": q_use, "sigma": sigma_use}
     base_tuple = tuple(sorted(base.items()))
     
     # Compute grids with caching
@@ -1042,7 +1159,7 @@ def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r
         )
         
         # Add vertical line for current value
-        current_val = {"sigma": sigma, "K": K, "r": r, "q": q}[xcol]
+        current_val = {"sigma": sigma_use, "K": K_use, "r": r_use, "q": q_use}[xcol]
         fig_sens.add_vline(
             x=current_val,
             line=dict(color="grey", dash="dot", width=1.5),
@@ -1266,14 +1383,14 @@ def render_detailed_page(df, selected_date, default_S0, default_sigma, default_r
             st.info("No saved JSON results found. Run the preprocessing pipeline to generate results.")
 
 # -------------------------------------------------------------------
-# 10. Page rendering
+# 9. Page rendering
 # -------------------------------------------------------------------
 
 # Render the selected page
 if page == "Overview":
-    render_overview_page(df, selected_date, default_S0, default_sigma, default_r, q_est, row, cf_price, vanilla_call, vanilla_put, run_mc, mc_price, mc_se, T1)
+    render_overview_page(df, selected_date, default_S0, default_sigma, default_r, q_est, row, S0, K, T1, T2, r, q, sigma, cf_price, vanilla_call, vanilla_put, mc_price, mc_se)
 else:
-    render_detailed_page(df, selected_date, default_S0, default_sigma, default_r, q_est, row, cf_price, call_leg, put_leg, vanilla_call, vanilla_put, run_mc, mc_price, mc_se, mc_payoffs, mc_paths, S0, K, T1, T2, r, q, sigma)
+    render_detailed_page(df, selected_date, default_S0, default_sigma, default_r, q_est, row, S0, K, T1, T2, r, q, sigma, cf_price, call_leg, put_leg, vanilla_call, vanilla_put, run_mc, mc_price, mc_se, mc_payoffs, mc_paths)
 
 # Footer
 st.markdown("---")
